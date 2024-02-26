@@ -17,6 +17,9 @@ class CustomVideoPlayer extends StatefulWidget {
 class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
   VideoPlayerController? videoController;
 
+  //현재 포지션을 0부터 시작해서 계속 여기에 저장
+  Duration currentPosition = Duration();
+
   @override
   void initState() {
     super.initState();
@@ -29,9 +32,15 @@ class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
 
     await videoController!.initialize();
 
-    setState(() {
+    videoController!.addListener(() {
+      final currentPosition = videoController!.value.position;
 
+      setState(() {
+        this.currentPosition = currentPosition;
+      });
     });
+
+    setState(() {});
   }
 
   @override
@@ -52,19 +61,22 @@ class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
               onReversePressed: onReversePressed,
               isPlaying: videoController!.value.isPlaying,
             ),
-            Positioned(
-              right: 0,
-              child: IconButton(
-                  onPressed: () {},
-                  color: Colors.white,
-                  iconSize: 30.0,
-                  icon: Icon(Icons.photo_camera_back)),
-            )
+            _NewVideo(onPressed: onNewVideoPressed),
+            _SliderBottom(
+                currentPosition: currentPosition,
+                maxPosition: videoController!.value.duration,
+                onSliderChanged: onSliderChanged)
           ],
         ));
   }
 
-  void onForwardPressed(){
+  void onSliderChanged(double val) {
+    videoController!.seekTo(Duration(seconds: val.toInt()));
+  }
+
+  void onNewVideoPressed() {}
+
+  void onForwardPressed() {
     //비디오의 전체 길이를 가져오려면 duration을 사용
     final maxPosition = videoController!.value.duration;
     final currentPosition = videoController!.value.position;
@@ -73,40 +85,39 @@ class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
     Duration position = maxPosition;
 
     //현재 실행하고 있는 곳이 3초가 지났으면은 (3초 이하일 때 3초 뒤로 가면 마이너스가 되니)
-    if((maxPosition - Duration(seconds: 3)).inSeconds > currentPosition.inSeconds ) {
+    if ((maxPosition - Duration(seconds: 3)).inSeconds >
+        currentPosition.inSeconds) {
       position = currentPosition + Duration(seconds: 3);
     }
 
     videoController!.seekTo(position);
   }
 
-  void onPlayPressed(){
+  void onPlayPressed() {
     //이미 실행중이면 중지
     //실행중이 아니면 실행
     setState(() {
-      if(videoController!.value.isPlaying){
+      if (videoController!.value.isPlaying) {
         videoController!.pause();
-      }
-      else {
+      } else {
         videoController!.play();
       }
     });
   }
 
-  void onReversePressed(){
+  void onReversePressed() {
     final currentPosition = videoController!.value.position;
 
     //position을 기본인 0초로 초기화
     Duration position = Duration();
 
     //현재 실행하고 있는 곳이 3초가 지났으면은 (3초 이하일 때 3초 뒤로 가면 마이너스가 되니)
-    if(currentPosition.inSeconds > 3) {
+    if (currentPosition.inSeconds > 3) {
       position = currentPosition - Duration(seconds: 3);
     }
 
     videoController!.seekTo(position);
   }
-
 }
 
 class _Controls extends StatelessWidget {
@@ -115,12 +126,13 @@ class _Controls extends StatelessWidget {
   final VoidCallback onForwardPressed;
   final bool isPlaying;
 
-  const _Controls({
-  required this.onPlayPressed,
-  required this.onReversePressed,
-  required this.onForwardPressed,
-  required this.isPlaying,
-  Key? key}) : super(key: key);
+  const _Controls(
+      {required this.onPlayPressed,
+      required this.onReversePressed,
+      required this.onForwardPressed,
+      required this.isPlaying,
+      Key? key})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -131,9 +143,13 @@ class _Controls extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          renderIconButton(onPressed: onReversePressed, iconData: Icons.rotate_left),
-          renderIconButton(onPressed: onPlayPressed, iconData: isPlaying? Icons.pause : Icons.play_arrow),
-          renderIconButton(onPressed: onForwardPressed, iconData: Icons.rotate_right),
+          renderIconButton(
+              onPressed: onReversePressed, iconData: Icons.rotate_left),
+          renderIconButton(
+              onPressed: onPlayPressed,
+              iconData: isPlaying ? Icons.pause : Icons.play_arrow),
+          renderIconButton(
+              onPressed: onForwardPressed, iconData: Icons.rotate_right),
         ],
       ),
     );
@@ -146,6 +162,74 @@ class _Controls extends StatelessWidget {
       iconSize: 30.0,
       color: Colors.white,
       icon: Icon(iconData),
+    );
+  }
+}
+
+class _NewVideo extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _NewVideo({required this.onPressed, Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 0,
+      child: IconButton(
+          onPressed: onPressed,
+          color: Colors.white,
+          iconSize: 30.0,
+          icon: Icon(Icons.photo_camera_back)),
+    );
+  }
+}
+
+class _SliderBottom extends StatelessWidget {
+  final Duration currentPosition;
+  final Duration maxPosition;
+  final ValueChanged<double> onSliderChanged;
+
+  const _SliderBottom(
+      {required this.currentPosition,
+      required this.maxPosition,
+      required this.onSliderChanged,
+      Key? key})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 0,
+      right: 0,
+      left: 0,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Row(
+          children: [
+            Text(
+              '${currentPosition.inMinutes}:${(currentPosition.inSeconds % 60).toString().padLeft(2, '0')}',
+              style: TextStyle(
+                color: Colors.white,
+              ),
+            ),
+            Expanded(
+              child: Slider(
+                value: currentPosition.inSeconds.toDouble(),
+                //onchanged는 내가 직접 슬라이더를 클릭해서 움직일 때 불림
+                onChanged: onSliderChanged,
+                max: maxPosition.inSeconds.toDouble(),
+                min: 0,
+              ),
+            ),
+            Text(
+              '${maxPosition.inMinutes}:${(maxPosition.inSeconds % 60).toString().padLeft(2, '0')}',
+              style: TextStyle(
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
