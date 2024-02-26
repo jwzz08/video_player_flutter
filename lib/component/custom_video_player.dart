@@ -1,4 +1,3 @@
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,8 +6,12 @@ import 'package:video_player/video_player.dart';
 
 class CustomVideoPlayer extends StatefulWidget {
   final XFile video;
+  final VoidCallback onNewVideoPressed;
 
-  const CustomVideoPlayer({required this.video, Key? key}) : super(key: key);
+  const CustomVideoPlayer({
+    required this.video,
+    required this.onNewVideoPressed,
+    Key? key}) : super(key: key);
 
   @override
   State<CustomVideoPlayer> createState() => _CustomVideoPlayerState();
@@ -19,6 +22,7 @@ class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
 
   //현재 포지션을 0부터 시작해서 계속 여기에 저장
   Duration currentPosition = Duration();
+  bool showControls = false;
 
   @override
   void initState() {
@@ -27,7 +31,21 @@ class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
     initializeController();
   }
 
+  //videoController를 initState에서 관리하고 있어서, stateful이 실행중인 상황에서 새로운 동영상을 다시 불러오면
+  //화면 업데이트가 되지 않으니 update 위젯을 불러와서 initializeController 함수를 다시 부른다.
+  @override
+  void didUpdateWidget(covariant CustomVideoPlayer oldWidget){
+    super.didUpdateWidget(oldWidget);
+
+    if(oldWidget.video.path != widget.video.path){
+      initializeController();
+    }
+  }
+
   initializeController() async {
+    //매번 초기화 시켜주기
+    currentPosition = Duration();
+
     videoController = VideoPlayerController.file(File(widget.video.path));
 
     await videoController!.initialize();
@@ -52,29 +70,36 @@ class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
     return AspectRatio(
         //video를 원래 비율대로 설정
         aspectRatio: videoController!.value.aspectRatio,
-        child: Stack(
-          children: [
-            VideoPlayer(videoController!),
-            _Controls(
-              onForwardPressed: onForwardPressed,
-              onPlayPressed: onPlayPressed,
-              onReversePressed: onReversePressed,
-              isPlaying: videoController!.value.isPlaying,
-            ),
-            _NewVideo(onPressed: onNewVideoPressed),
-            _SliderBottom(
-                currentPosition: currentPosition,
-                maxPosition: videoController!.value.duration,
-                onSliderChanged: onSliderChanged)
-          ],
+        child: GestureDetector(
+          onTap: (){
+            setState(() {
+              showControls = !showControls;
+            });
+          },
+          child: Stack(
+            children: [
+              VideoPlayer(videoController!),
+              if(showControls)
+                _Controls(
+                  onForwardPressed: onForwardPressed,
+                  onPlayPressed: onPlayPressed,
+                  onReversePressed: onReversePressed,
+                  isPlaying: videoController!.value.isPlaying,
+                ),
+              if(showControls)
+                _NewVideo(onPressed: widget.onNewVideoPressed),
+              _SliderBottom(
+                  currentPosition: currentPosition,
+                  maxPosition: videoController!.value.duration,
+                  onSliderChanged: onSliderChanged)
+            ],
+          ),
         ));
   }
 
   void onSliderChanged(double val) {
     videoController!.seekTo(Duration(seconds: val.toInt()));
   }
-
-  void onNewVideoPressed() {}
 
   void onForwardPressed() {
     //비디오의 전체 길이를 가져오려면 duration을 사용
@@ -139,8 +164,8 @@ class _Controls extends StatelessWidget {
     return Container(
       //control 버튼이 나타나면 뒷 배경이 어두워지게 설정
       color: Colors.black.withOpacity(0.5),
+      height: MediaQuery.of(context).size.height,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           renderIconButton(
